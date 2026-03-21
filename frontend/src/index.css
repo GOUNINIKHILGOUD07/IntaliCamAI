@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default light mode */
+  --color-bg-base: #f1f5f9;
+  --color-bg-panel: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-light: #cbd5e1;
+  --color-text-main: #0f172a;
+  --color-text-muted: #64748b;
+}
+
+.dark {
+  /* Dark mode */
+  --color-bg-base: #0a0b10;
+  --color-bg-panel: #13161c;
+  --color-border: #1e232b;
+  --color-border-light: #2a313c;
+  --color-text-main: #f8fafc;
+  --color-text-muted: #94a3b8;
+}
+
+
+@layer base {
+  body {
+    @apply bg-dark-900 text-text-main font-sans antialiased selection:bg-primary/30 selection:text-white overflow-x-hidden;
+  }
+}
+
+@layer components {
+  /* SentinelAI Base Panel Style */
+  .panel {
+    @apply bg-dark-800 border border-dark-700 rounded-xl relative overflow-hidden shadow-sm;
+  }
+
+  .input-field {
+    @apply w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200 placeholder:text-dark-600;
+  }
+
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-hover text-white font-medium py-2.5 px-5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-[0_4px_14px_0_rgba(99,102,241,0.2)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)];
+  }
+
+  .btn-secondary {
+    @apply bg-transparent hover:bg-dark-700 border border-dark-600 text-text-muted hover:text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2;
+  }
+  
+  /* Status Badges */
+  .badge-live {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 bg-safe_bg border border-safe/30 text-safe text-xs font-semibold rounded-full tracking-wide;
+  }
+  
+  .badge-rec {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 bg-danger_bg border border-danger/30 text-danger text-xs font-semibold rounded-full tracking-wide;
+  }
+  
+  .badge-offline {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 bg-dark-700 border border-dark-600 text-text-muted text-xs font-semibold rounded-full tracking-wide;
+  }
+
+  .badge-alert {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 bg-accent/10 border border-accent/30 text-accent text-xs font-semibold rounded-full tracking-wide;
+  }
+
+  /* Status Dots for badges */
+  .dot-live {
+    @apply w-1.5 h-1.5 rounded-full bg-safe shadow-[0_0_8px_rgba(16,185,129,0.8)];
+  }
+  .dot-rec {
+    @apply w-1.5 h-1.5 rounded-full bg-danger shadow-[0_0_8px_rgba(220,38,38,0.8)];
+  }
+  .dot-offline {
+    @apply w-1.5 h-1.5 rounded-full bg-gray-500;
+  }
+}
