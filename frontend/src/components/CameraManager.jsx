@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Edit2, Camera as CameraIcon, RefreshCw, WifiOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
-const STREAM_BASE = 'http://localhost:8000';
+const API_BASE    = import.meta.env.VITE_API_URL    || 'http://localhost:5000/api';
+const STREAM_BASE = import.meta.env.VITE_STREAM_BASE || 'http://localhost:8000';
 
 const validateSource = (src) => {
   const trimmed = src.trim();
@@ -51,8 +52,11 @@ const CameraManager = () => {
   };
 
   const fetchCameras = useCallback(async () => {
+    const token = localStorage.getItem('intalicam_token');
     try {
-      const res = await fetch(`${STREAM_BASE}/cameras`);
+      const res = await fetch(`${API_BASE}/cameras`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setCameras(data);
@@ -85,27 +89,30 @@ const CameraManager = () => {
       return;
     }
 
+    const token = localStorage.getItem('intalicam_token');
     setSaving(true);
     try {
       if (modalMode === 'add') {
-        const res = await fetch(`${STREAM_BASE}/add-camera`, {
+        const res = await fetch(`${API_BASE}/cameras/add-camera`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(formData),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to add camera');
+        if (!res.ok) throw new Error(data.error || data.message || 'Failed to add camera');
         setCameras(prev => [...prev, data]);
         showToast('success', `Camera "${data.name}" added!`);
       } else {
-        const res = await fetch(`${STREAM_BASE}/cameras/${editingCamera.id}`, {
+        // Use the MongoDB _id for the REST call
+        const camId = editingCamera._id || editingCamera.id;
+        const res = await fetch(`${API_BASE}/cameras/${camId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(formData),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update camera');
-        setCameras(prev => prev.map(c => c.id === data.id ? data : c));
+        if (!res.ok) throw new Error(data.error || data.message || 'Failed to update camera');
+        setCameras(prev => prev.map(c => (c._id || c.id) === camId ? data : c));
         showToast('success', `Camera "${data.name}" updated!`);
       }
       closeModal();
@@ -118,10 +125,14 @@ const CameraManager = () => {
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Remove "${name}" from the network?`)) return;
+    const token = localStorage.getItem('intalicam_token');
     try {
-      const res = await fetch(`${STREAM_BASE}/cameras/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/cameras/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('Failed to remove camera');
-      setCameras(prev => prev.filter(c => c.id !== id));
+      setCameras(prev => prev.filter(c => (c._id || c.id) !== id));
       showToast('success', `"${name}" removed.`);
     } catch (err) {
       showToast('error', err.message);
@@ -189,7 +200,7 @@ const CameraManager = () => {
       {!loading && cameras.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {cameras.map(cam => (
-            <div key={cam.id} className="glass-panel p-6 flex flex-col h-full">
+            <div key={cam._id || cam.id} className="glass-panel p-6 flex flex-col h-full">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-dark-700 rounded-xl text-primary">
@@ -213,7 +224,7 @@ const CameraManager = () => {
                   </button>
                   {/* Delete button */}
                   <button
-                    onClick={() => handleDelete(cam.id, cam.name)}
+                    onClick={() => handleDelete(cam._id || cam.id, cam.name)}
                     className="p-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                     title="Remove camera"
                   >
@@ -237,10 +248,10 @@ const CameraManager = () => {
                 </div>
               </div>
 
-              {/* Inline preview thumbnail */}
+              {/* Inline preview thumbnail (from streaming backend on 8000) */}
               <div className="mt-4 pt-4 border-t border-dark-700">
                 <img
-                  src={`${STREAM_BASE}/stream/${cam.id}`}
+                  src={`${STREAM_BASE}/stream/${cam._id || cam.id}`}
                   alt={`Preview ${cam.name}`}
                   className="w-full aspect-video object-cover rounded-lg bg-black"
                   onError={(e) => { e.target.style.display = 'none'; }}

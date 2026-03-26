@@ -3,15 +3,17 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext';
 import { 
   Shield, LayoutDashboard, Video, AlertTriangle, 
-  History, Settings, User, LogOut, Search, Bell, Activity
+  History, Settings, User, LogOut, Search, Bell, Activity, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAlerts } from './hooks/useAlerts';
 
 // Components
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import LiveMonitor from './components/LiveMonitor';
 import AlertHistory from './components/AlertHistory';
+import AlertCenter from './components/AlertCenter';
 import CameraManager from './components/CameraManager';
 import UserProfile from './components/UserProfile';
 import SettingsView from './components/Settings';
@@ -46,7 +48,8 @@ const PrivateRoute = ({ children }) => {
 const NavigationParams = [
   { path: '/', name: 'Dashboard', icon: LayoutDashboard },
   { path: '/monitor', name: 'Live Cameras', icon: Video },
-  { path: '/history', name: 'Alerts', icon: AlertTriangle, hasDynamicBadge: true },
+  { path: '/alerts', name: 'Live Alerts', icon: ShieldAlert, hasDynamicBadge: true },
+  { path: '/history', name: 'Alert History', icon: AlertTriangle },
   { path: '/activity', name: 'Activity Log', icon: History },
   { path: '/cameras', name: 'Camera Management', icon: Settings },
   { path: '/profile', name: 'Profile', icon: User },
@@ -204,58 +207,8 @@ const PageWrapper = ({ children }) => {
 }
 
 const Layout = ({ children }) => {
-  const [unreadAlerts, setUnreadAlerts] = React.useState(0);
-
-  React.useEffect(() => {
-    // Basic setup for cross-app alerts
-    const initialAlerts = [
-      { id: 101, camera: 'Main Entrance', type: 'Person Detected', level: 'high', timestamp: '2023-10-27 14:32:00', status: 'PENDING' },
-      { id: 102, camera: 'Back Alley', type: 'Motion Detected', level: 'medium', timestamp: '2023-10-27 12:15:22', status: 'RESOLVED' },
-      { id: 103, camera: 'Server Room', type: 'Unauthorized Access', level: 'critical', timestamp: '2023-10-27 09:05:11', status: 'PENDING' },
-    ];
-    
-    let existingStr = localStorage.getItem('intalicam_alerts');
-    if (!existingStr) {
-        localStorage.setItem('intalicam_alerts', JSON.stringify(initialAlerts));
-        existingStr = JSON.stringify(initialAlerts);
-    }
-    
-    const updateCount = () => {
-        const arr = JSON.parse(localStorage.getItem('intalicam_alerts')) || [];
-        setUnreadAlerts(arr.filter(a => a.status === 'PENDING').length);
-    };
-    updateCount();
-    
-    // The Core Real-time App Simulation Engine (runs everywhere in the app)
-    const cameras = ['Main Entrance', 'Back Alley', 'Server Room', 'Parking Lot', 'Lobby', 'Storage Area'];
-    const anomalyTypes = ['Person Detected', 'Motion Detected', 'Unauthorized Access', 'Vehicle Detected', 'Perimeter Breach', 'Loitering Detected'];
-    const levels = ['low', 'medium', 'high', 'critical'];
-
-    const engineInterval = setInterval(() => {
-      const arr = JSON.parse(localStorage.getItem('intalicam_alerts')) || [];
-      const newAlert = {
-        id: arr.length > 0 ? arr[0].id + 1 : 106,
-        camera: cameras[Math.floor(Math.random() * cameras.length)],
-        type: anomalyTypes[Math.floor(Math.random() * anomalyTypes.length)],
-        level: levels[Math.floor(Math.random() * levels.length)],
-        timestamp: new Date().toISOString().substring(0,19).replace('T', ' '),
-        status: 'PENDING'
-      };
-      
-      const newArr = [newAlert, ...arr].slice(0, 50); // Keep max 50
-      localStorage.setItem('intalicam_alerts', JSON.stringify(newArr));
-      
-      // Dispatch event to trick other tabs/components
-      window.dispatchEvent(new Event('alerts-updated'));
-      updateCount();
-    }, 15000); // 15 seconds
-
-    window.addEventListener('alerts-updated', updateCount);
-    return () => {
-      clearInterval(engineInterval);
-      window.removeEventListener('alerts-updated', updateCount);
-    };
-  }, []);
+  // Use the centralised real-time alert hook for the unread count
+  const { pendingCount: unreadAlerts } = useAlerts();
 
   return (
     <div className="flex bg-dark-900 min-h-screen">
@@ -292,6 +245,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/monitor" element={<LiveMonitor />} />
+              <Route path="/alerts" element={<AlertCenter />} />
               <Route path="/history" element={<AlertHistory />} />
               <Route path="/cameras" element={<CameraManager />} />
               <Route path="/activity" element={<ActivityLog />} />

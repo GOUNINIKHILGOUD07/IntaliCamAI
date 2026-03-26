@@ -1,0 +1,20 @@
+{
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Windows",
+  "venvPath": "d:\\My Documents\\Downloads\\intalicam",
+  "venv": ".venv",
+  "include": [
+    "ai-detection-service",
+    "backend",
+    "streaming-backend"
+  ],
+  "extraPaths": [
+    "./ai-detection-service",
+    "./backend",
+    "./streaming-backend"
+  ],
+  "typeCheckingMode": "off",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "useLibraryCodeForTypes": true
+}

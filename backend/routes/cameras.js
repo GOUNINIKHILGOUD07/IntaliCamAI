@@ -33,6 +33,22 @@ router.post('/add-camera', verifyToken, async (req, res) => {
   }
 });
 
+// Update a camera
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const { name, location, sourceUrl } = req.body;
+    const camera = await Camera.findByIdAndUpdate(
+      req.params.id,
+      { name, location, sourceUrl },
+      { new: true, runValidators: true }
+    );
+    if (!camera) return res.status(404).json({ message: 'Camera not found' });
+    res.json(camera);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Delete a camera
 router.delete('/:id', verifyToken, async (req, res) => {
   try {

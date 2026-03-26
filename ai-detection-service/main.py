@@ -1,105 +1,130 @@
+"""
+main.py — IntalicamAI Surveillance Detection Service
+Entry point: opens RTSP/webcam stream, runs YOLO, feeds AlertEngine.
+
+Usage:
+    python main.py                          # uses .env settings
+    RTSP_URL=rtsp://... python main.py      # override stream
+    SHOW_DISPLAY=false python main.py       # headless server mode
+"""
 import cv2
-from ultralytics import YOLO
-import requests
 import time
-import os
-from dotenv import load_dotenv
-# Load environment variables
-load_dotenv()
+import sys
+import requests
+from ultralytics import YOLO
 
-API_URL = os.getenv("API_URL", "http://localhost:5000/api")
-CAMERA_ID = os.getenv("CAMERA_ID", "dummy_camera_id")
+import config
+from alert_engine import AlertEngine
+from alert_dispatcher import AlertDispatcher
+import face_recognition_module   # will no-op if disabled in config
 
-# Load YOLOv8 model (downloads yolov8n.pt if not exists)
-print("Loading YOLO model...")
-model = YOLO("yolov8n.pt")
-print("Model loaded.")
 
-# Target classes to trigger alerts (COCO classes: 0 is person, etc.)
-# 0: person, 43: knife (just examples)
-THREAT_CLASSES = [0] 
+def open_stream(url: str):
+    """Open a VideoCapture from 0 (webcam int) or an RTSP/file URL."""
+    source = int(url) if url.isdigit() else url
+    cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open stream: {url}")
+    return cap
 
-# Cooldown to avoid spamming the API (seconds)
-ALERT_COOLDOWN = 10 
-last_alert_time = 0
 
-def send_alert(detection_type, threat_level):
-    global last_alert_time
-    current_time = time.time()
-    
-    if current_time - last_alert_time < ALERT_COOLDOWN:
-        return # Skip if too soon
-        
-    payload = {
-        "cameraId": CAMERA_ID,
-        "detectionType": detection_type,
-        "threatLevel": threat_level
-    }
-    
+def update_camera_status(status: str):
+    """Update camera status (online/offline) in the backend."""
     try:
-        response = requests.post(f"{API_URL}/alerts", json=payload)
-        if response.status_code == 201:
-            print(f"Alert sent successfully: {detection_type} ({threat_level})")
-            last_alert_time = current_time
-        else:
-            print(f"Failed to send alert: {response.text}")
+        url = f"{config.API_URL}/cameras/{config.CAMERA_ID}/status"
+        requests.patch(url, json={"status": status}, timeout=5)
+        print(f"  Status   : Camera reported as '{status}'")
     except Exception as e:
-        print(f"Error sending alert: {e}")
+        print(f"  Warning  : Could not report status to backend: {e}")
+
 
 def main():
-    # Attempt to open default webcam
-    cap = cv2.VideoCapture(0)
-    
-    if not cap.isOpened():
-        print("Error: Could not open webcam.")
-        return
+    print("=" * 60)
+    print("  IntalicamAI — AI Surveillance Detection Service")
+    print("=" * 60)
+    print(f"  Stream   : {config.RTSP_URL}")
+    print(f"  Camera   : {config.CAMERA_NAME}  ({config.CAMERA_ID})")
+    print(f"  Backend  : {config.API_URL}")
+    print(f"  Model    : {config.YOLO_MODEL}")
+    print(f"  Display  : {config.SHOW_DISPLAY}")
+    print("=" * 60)
 
-    print("Starting video feed...")
+    # ── Load YOLO ─────────────────────────────────────────────────────
+    print("\nLoading YOLO model …")
+    model = YOLO(config.YOLO_MODEL)
+    print("Model ready.\n")
+
+    # ── Init subsystems ───────────────────────────────────────────────
+    dispatcher = AlertDispatcher()
+    engine     = AlertEngine(dispatcher)
+
+    # ── Open stream (retry loop) ──────────────────────────────────────
+    while True:
+        try:
+            cap = open_stream(config.RTSP_URL)
+            update_camera_status("online")
+            break
+        except RuntimeError as e:
+            print(f"Stream error: {e}  Retrying in 5s …")
+            update_camera_status("offline")
+            time.sleep(5)
+
+    print("Streaming started. Press 'q' to quit.\n")
+    fps_time = time.time()
+    frame_count = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Error: Could not read frame.")
-            break
+            print("Stream lost — attempting reconnect …")
+            update_camera_status("offline")
+            cap.release()
+            time.sleep(3)
+            try:
+                cap = open_stream(config.RTSP_URL)
+                update_camera_status("online")
+            except RuntimeError:
+                continue
+            continue
 
-        # Run inference
-        results = model.track(frame, persist=True, verbose=False)
-        
-        threat_detected = False
-        detected_objects = []
+        frame_count += 1
 
-        # Process results
-        if results[0].boxes:
-            for box in results[0].boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                
-                # If detected object is in our threat list and confidence > 50%
-                if cls_id in THREAT_CLASSES and conf > 0.5:
-                    threat_detected = True
-                    detected_objects.append(model.names[cls_id])
-                    
-                    # Draw bounding box (red for threat)
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, f"{model.names[cls_id]} {conf:.2f}", (x1, y1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        # ── YOLO inference ────────────────────────────────────────────
+        # Track all relevant classes in one pass (person + objects)
+        tracked_classes = [config.PERSON_CLASS] + list(config.OBJECT_CLASSES.keys())
+        results = model.track(
+            frame,
+            persist=True,
+            verbose=False,
+            classes=tracked_classes,
+        )
 
-        if threat_detected:
-            # Aggregate what was found
-            detection_str = ", ".join(set(detected_objects))
-            send_alert(detection_str, "high")
+        # ── Alert Engine ──────────────────────────────────────────────
+        annotated = engine.process(frame, results)
 
-        # Show the frame
-        cv2.imshow("Smart Surveillance AI", frame)
+        # ── Face Recognition (optional) ───────────────────────────────
+        face_recognition_module.analyse_persons(frame, dispatcher)
 
-        # Press 'q' to quit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # ── FPS overlay ───────────────────────────────────────────────
+        elapsed = time.time() - fps_time
+        if elapsed > 0:
+            fps = frame_count / elapsed
+            cv2.putText(annotated, f"FPS: {fps:.1f}", (annotated.shape[1] - 80, 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (80, 180, 80), 1)
 
-    # Cleanup
+        # ── Display ───────────────────────────────────────────────────
+        if config.SHOW_DISPLAY:
+            cv2.imshow("IntalicamAI — Surveillance Monitor", annotated)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print("User quit.")
+                break
+
     cap.release()
-    cv2.destroyAllWindows()
+    update_camera_status("offline")
+    if config.SHOW_DISPLAY:
+        cv2.destroyAllWindows()
+    print("Detection service stopped.")
+
 
 if __name__ == "__main__":
     main()

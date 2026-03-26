@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Camera, AlertTriangle, Activity, Video, ArrowRight, Cpu, HardDrive, Wifi, Database, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const STREAM_BASE = 'http://localhost:8000';
+const API_BASE    = import.meta.env.VITE_API_URL    || 'http://localhost:5000/api';
+const STREAM_BASE = import.meta.env.VITE_STREAM_BASE || 'http://localhost:8000';
 
 const CustomGraph = ({ activityData, alertData }) => {
   const width = 800;
