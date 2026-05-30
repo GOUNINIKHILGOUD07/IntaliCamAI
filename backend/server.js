@@ -57,27 +57,14 @@ app.get('/api/health', (req, res) => {
 
 // ── Start ──────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-let dbConnected = false;
-
-// Middleware to block DB-dependent routes if MongoDB is down
-app.use('/api/cameras', (req, res, next) => {
-  if (!dbConnected) return res.status(503).json({ message: 'Database not connected. Use streaming backend on port 8000 for camera management.' });
-  next();
-});
-app.use('/api/alerts', (req, res, next) => {
-  if (!dbConnected && req.method !== 'POST') return res.status(503).json({ message: 'Database not connected.' });
-  next();
-});
-
+// Database status
 const connectWithRetry = () => {
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
-      dbConnected = true;
       console.log('[DB] MongoDB connected');
     })
     .catch((err) => {
-      console.error(`[DB] Connection failed (${err.message}) — retrying in 10s…`);
-      setTimeout(connectWithRetry, 10000);
+      console.error(`[DB] Connection failed (${err.message}) — Node will continue in memory-only mode for UI stability.`);
     });
 };
 

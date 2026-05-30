@@ -1,20 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera as CameraIcon, Search, RefreshCw, LayoutGrid, List, Filter } from 'lucide-react';
+import { Camera as CameraIcon, Search, RefreshCw, LayoutGrid, List, Filter, Maximize } from 'lucide-react';
 
 const STREAM_BASE = 'http://localhost:8000';
 
-const CameraFeed = ({ cam, statusOverride }) => {
+const CameraFeed = ({ cam, statusOverride, refreshKey }) => {
   const [streamStatus, setStreamStatus] = useState('loading'); // loading | live | offline
   const imgRef = useRef(null);
   const retryTimer = useRef(null);
 
-  const streamUrl = `${STREAM_BASE}/stream/${cam.id}`;
+  const streamUrl = `${STREAM_BASE}/stream/${cam.id}?t=${refreshKey || Date.now()}`;
   
-  // For the sake of the mockup demonstration, randomly assign one 'alert' and one 'offline' 
-  // if not explicitly set by the real backend (since our backend only knows 'online'/'offline')
+  const [isRecordingState, setIsRecordingState] = useState(cam.recording || false);
   const displayStatus = statusOverride || cam.status; 
   const isAlert = displayStatus === 'alert';
   const isOffline = displayStatus === 'offline';
+
+  const toggleRecord = async () => {
+    try {
+      const res = await fetch(`${STREAM_BASE}/record/${cam.id}`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setIsRecordingState(data.recording);
+        if (!data.recording) {
+           alert('Recording completed and saved to the website! You can view and download it natively in the "Saved Recordings" tab on the sidebar.');
+        } else {
+           alert('Recording started.');
+        }
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
 
   const retryStream = () => {
     setStreamStatus('loading');
@@ -38,7 +54,7 @@ const CameraFeed = ({ cam, statusOverride }) => {
   };
 
   return (
-    <div className={`panel flex flex-col h-72 transition-all duration-300 ${isAlert ? 'border-danger shadow-[0_0_15px_rgba(220,38,38,0.2)]' : 'border-dark-700'}`}>
+    <div id={`live-monitor-cam-${cam.id}`} className={`panel flex flex-col h-72 transition-all duration-300 ${isAlert ? 'border-danger shadow-[0_0_15px_rgba(220,38,38,0.2)]' : 'border-dark-700'}`}>
       
       {/* Video Area */}
       <div className="relative flex-1 bg-black/80 overflow-hidden flex items-center justify-center group">
@@ -50,8 +66,37 @@ const CameraFeed = ({ cam, statusOverride }) => {
           {isOffline && <div className="badge-offline"><div className="dot-offline"></div> OFFLINE</div>}
         </div>
         
-        <div className="absolute top-4 right-4 z-10">
-          {!isOffline && <div className="badge-rec"><div className="dot-rec animate-pulse"></div> REC</div>}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          {isRecordingState && <div className="badge-rec flex items-center gap-1.5 border !bg-danger/20 border-danger/40"><div className="dot-rec animate-pulse"></div> REC</div>}
+          
+          {/* Always visible action buttons */}
+          <button 
+            onClick={() => {
+              const elem = document.getElementById(`live-monitor-cam-${cam.id}`);
+              if (elem) {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen();
+                } else {
+                  elem.requestFullscreen();
+                }
+              }
+            }} 
+            className="opacity-70 group-hover:opacity-100 transition-opacity bg-dark-900/80 hover:bg-dark-800 text-white font-bold p-1.5 rounded-full border border-dark-600 flex items-center justify-center backdrop-blur"
+            title="Full Screen"
+          >
+             <Maximize className="w-4 h-4 mx-1" />
+          </button>
+
+          {!isOffline && !isRecordingState && (
+            <button onClick={toggleRecord} className="opacity-70 group-hover:opacity-100 transition-opacity bg-dark-900/80 hover:bg-dark-800 text-white font-bold text-xs px-3 py-1.5 rounded-full border border-dark-600 flex items-center gap-2 backdrop-blur">
+               <div className="w-2.5 h-2.5 rounded-full bg-danger" /> Record
+            </button>
+          )}
+          {!isOffline && isRecordingState && (
+            <button onClick={toggleRecord} className="opacity-70 group-hover:opacity-100 transition-opacity bg-danger/20 hover:bg-danger/40 text-danger font-bold text-xs px-3 py-1.5 rounded-full border border-danger/50 flex items-center gap-2 backdrop-blur">
+               Stop
+            </button>
+          )}
         </div>
 
         {/* Central Animated Ring Indicator (shown when no feed OR as decorative element matching mockup) */}
@@ -92,6 +137,7 @@ const CameraFeed = ({ cam, statusOverride }) => {
 const LiveMonitor = () => {
   const [cameras, setCameras] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(Date.now());
 
   const fetchCameras = async () => {
     try {
@@ -99,6 +145,7 @@ const LiveMonitor = () => {
       if (res.ok) {
         const data = await res.json();
         setCameras(data);
+        setRefreshKey(Date.now());
       } else {
         throw new Error('Failed');
       }
@@ -196,7 +243,7 @@ const LiveMonitor = () => {
       {!loading && cameras.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6 pb-8">
           {displayCameras.map(cam => (
-            <CameraFeed key={cam.id} cam={cam} statusOverride={cam.displayStatus} />
+            <CameraFeed key={cam.id} cam={cam} statusOverride={cam.displayStatus} refreshKey={refreshKey} />
           ))}
           {/* Mock paddings to fill grid if only 1-2 cameras exist */}
           {displayCameras.length < 6 && Array.from({length: 6 - displayCameras.length}).map((_, i) => (

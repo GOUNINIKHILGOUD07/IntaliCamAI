@@ -1,7 +1,7 @@
 @echo off
+setlocal EnableDelayedExpansion
 TITLE IntaliCamAI - Full Stack Launcher
 COLOR 0A
-
 echo =====================================
 echo   IntaliCamAI - Full Stack Launcher
 echo =====================================
@@ -9,36 +9,42 @@ echo.
 
 REM ---- 1. Check MongoDB ----
 echo [1/4] Checking MongoDB...
-sc query MongoDB >nul 2>&1
+sc query MongoDB | findstr RUNNING >nul
 if %errorlevel% == 0 (
-  net start MongoDB >nul 2>&1
-  echo   MongoDB service started.
+  echo   MongoDB service is already running.
 ) else (
-  REM Try mongod.exe from common paths
-  set "MONGOD="
-  for %%P in (
-    "C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe"
-    "C:\Program Files\MongoDB\Server\7.0\bin\mongod.exe"
-    "C:\Program Files\MongoDB\Server\6.0\bin\mongod.exe"
-    "C:\mongodb\bin\mongod.exe"
-  ) do (
-    if exist %%P set "MONGOD=%%P"
-  )
-
-  if defined MONGOD (
-    echo   Starting mongod from %MONGOD%...
-    if not exist "%~dp0data\db" mkdir "%~dp0data\db"
-    start "MongoDB" cmd /k "%MONGOD% --dbpath %~dp0data\db"
-    timeout /t 3 >nul
+  net start MongoDB >nul 2>&1
+  sc query MongoDB | findstr RUNNING >nul
+  if %errorlevel% == 0 (
+    echo   MongoDB service started.
   ) else (
-    echo.
-    echo   [WARNING] MongoDB not found!
-    echo   Please install MongoDB Community from:
-    echo   https://www.mongodb.com/try/download/community
-    echo   Then run this script again.
-    echo.
-    pause
-    exit /b 1
+    REM Try mongod.exe from common paths
+    set "MONGOD="
+    for %%P in (
+      "C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe"
+      "C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe"
+      "C:\Program Files\MongoDB\Server\7.0\bin\mongod.exe"
+      "C:\Program Files\MongoDB\Server\6.0\bin\mongod.exe"
+      "C:\mongodb\bin\mongod.exe"
+    ) do (
+      if exist "%%~P" set "MONGOD=%%~P"
+    )
+
+    if defined MONGOD (
+      echo   Starting mongod from !MONGOD!...
+      if not exist "%~dp0data\db" mkdir "%~dp0data\db"
+      start "MongoDB" cmd /k "!MONGOD!" --dbpath "%~dp0data\db"
+      timeout /t 3 >nul
+    ) else (
+      echo.
+      echo   [WARNING] MongoDB not found!
+      echo   Please install MongoDB Community from:
+      echo   https://www.mongodb.com/try/download/community
+      echo   Then run this script again.
+      echo.
+      pause
+      exit /b 1
+    )
   )
 )
 

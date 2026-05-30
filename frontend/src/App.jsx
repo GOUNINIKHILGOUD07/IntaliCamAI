@@ -2,9 +2,10 @@ import React, { useContext } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext';
 import { 
-  Shield, LayoutDashboard, Video, AlertTriangle, 
-  History, Settings, User, LogOut, Search, Bell, Activity, ShieldAlert
+  LayoutDashboard, Video, AlertTriangle, 
+  History, Settings, User, LogOut, Search, Bell, Activity, ShieldAlert, Film
 } from 'lucide-react';
+import logoImg from './assets/logo.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAlerts } from './hooks/useAlerts';
 
@@ -18,6 +19,7 @@ import CameraManager from './components/CameraManager';
 import UserProfile from './components/UserProfile';
 import SettingsView from './components/Settings';
 import ActivityLog from './components/ActivityLog';
+import Recordings from './components/Recordings';
 
 // Boot theme initialization to prevent flickers
 try {
@@ -52,6 +54,7 @@ const NavigationParams = [
   { path: '/history', name: 'Alert History', icon: AlertTriangle },
   { path: '/activity', name: 'Activity Log', icon: History },
   { path: '/cameras', name: 'Camera Management', icon: Settings },
+  { path: '/recordings', name: 'Saved Recordings', icon: Film },
   { path: '/profile', name: 'Profile', icon: User },
   { path: '/settings', name: 'Settings', icon: Settings },
 ];
@@ -64,8 +67,8 @@ const Sidebar = ({ unreadAlerts }) => {
     <div className="w-64 bg-dark-900 border-r border-dark-700 h-screen flex flex-col fixed left-0 top-0 overflow-y-auto">
       {/* Brand Header */}
       <div className="p-6 flex items-center gap-3">
-        <div className="p-2 bg-dark-800 rounded-lg border border-dark-700">
-          <Shield className="text-primary w-6 h-6" />
+        <div className="flex items-center justify-center">
+          <img src={logoImg} alt="IntaliCam Logo" className="w-10 h-10 object-contain" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-text-main leading-tight">IntalicamAI</h1>
@@ -248,6 +251,7 @@ function App() {
               <Route path="/alerts" element={<AlertCenter />} />
               <Route path="/history" element={<AlertHistory />} />
               <Route path="/cameras" element={<CameraManager />} />
+              <Route path="/recordings" element={<Recordings />} />
               <Route path="/activity" element={<ActivityLog />} />
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/settings" element={<SettingsView />} />

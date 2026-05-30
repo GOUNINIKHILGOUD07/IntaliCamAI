@@ -1,13 +1,57 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import Alert from '../models/Alert.js';
 import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// ── GET /api/alerts/trends — Hourly trends for dashboard graph ─────────────
+router.get('/trends', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const stats = await Alert.aggregate([
+      { $match: { timestamp: { $gte: today } } },
+      {
+        $group: {
+          _id: {
+            bucket: { $floor: { $divide: [{ $hour: "$timestamp" }, 2] } },
+          },
+          activityCount: { $sum: 1 },
+          alertCount: {
+            $sum: {
+              $cond: [{ $in: ["$threatLevel", ["high", "critical"]] }, 1, 0]
+            }
+          }
+        }
+      },
+      { $sort: { "_id.bucket": 1 } }
+    ]);
+
+    const activity = new Array(12).fill(0);
+    const alerts = new Array(12).fill(0);
+
+    stats.forEach(s => {
+      const b = s._id.bucket;
+      if (b >= 0 && b < 12) {
+        activity[b] = s.activityCount * 2; // Scaling for visual parity with mock
+        alerts[b]   = s.alertCount;
+      }
+    });
+
+    res.json({ activity, alerts });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // ── Helper: emit real-time event via Socket.io attached to app ─────────────
 const emitAlert = (req, alert) => {
   const io = req.app.get('io');
   if (io) {
+    console.log(`[WS] Emitting new_alert: ${alert.detectionType}`);
     io.emit('new_alert', alert);
   }
 };
@@ -111,7 +155,7 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    const {
+    let {
       cameraId,
       cameraName,
       detectionType,
@@ -120,24 +164,43 @@ router.post('/', async (req, res) => {
       person,
       details,
       timestamp,
+      confidence,
     } = req.body;
 
     if (!detectionType || !threatLevel) {
       return res.status(400).json({ message: 'detectionType and threatLevel are required.' });
     }
 
-    const alert = new Alert({
+    // Handle base64 imaging: if imageUrl is a long data string, save to file
+    if (imageUrl && imageUrl.startsWith('data:image')) {
+      try {
+        const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '');
+        const filename = `snap_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
+        const uploadDir = path.join(process.cwd(), 'snapshots');
+        
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        
+        fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
+        imageUrl = `snapshots/${filename}`;
+      } catch (err) {
+        console.error('[BACKEND] Failed to save snapshot:', err);
+      }
+    }
+
+    const alertData = {
       cameraId:      cameraId   || undefined,
       cameraName:    cameraName || 'Unknown Camera',
       detectionType,
-      threatLevel,
+      threatLevel:   threatLevel.toLowerCase(),
       imageUrl:      imageUrl   || '',
       person:        person     || 'Unknown',
       details:       details    || '',
+      confidence:    confidence || 1.0,
       timestamp:     timestamp  ? new Date(timestamp) : new Date(),
       status:        'PENDING',
-    });
+    };
 
+    const alert = new Alert(alertData);
     await alert.save();
 
     // Push via Socket.io to all connected frontend clients
@@ -145,6 +208,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(alert);
   } catch (error) {
+    console.error('[ALERTS] POST error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

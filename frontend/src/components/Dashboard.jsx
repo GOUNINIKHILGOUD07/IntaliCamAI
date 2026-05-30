@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, AlertTriangle, Activity, Video, ArrowRight, Cpu, HardDrive, Wifi, Database, CheckCircle2 } from 'lucide-react';
+import { Camera, AlertTriangle, Activity, Video, ArrowRight, Cpu, HardDrive, Wifi, Database, CheckCircle2, Maximize, Circle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAlerts } from '../hooks/useAlerts';
 
 const API_BASE    = import.meta.env.VITE_API_URL    || 'http://localhost:5000/api';
 const STREAM_BASE = import.meta.env.VITE_STREAM_BASE || 'http://localhost:8000';
@@ -98,6 +99,19 @@ const Dashboard = () => {
   
   const [graphData, setGraphData] = useState({ activity: baseActivity, alerts: baseAlerts });
 
+  const { alerts } = useAlerts();
+
+  const toggleRecord = async (cam) => {
+    try {
+      const res = await fetch(`${STREAM_BASE}/record/${cam.id || cam._id}`, { method: 'POST' });
+      if (!res.ok) throw new Error('API failed');
+      const data = await res.json();
+      setLiveCameras(prev => prev.map(c => (c.id || c._id) === (cam.id || cam._id) ? { ...c, recording: data.recording } : c));
+    } catch(err) {
+      console.error('Record toggle failed', err);
+    }
+  };
+
   useEffect(() => {
     // Load cameras for stats and preview
     const fetchCameras = async () => {
@@ -126,23 +140,42 @@ const Dashboard = () => {
       }
     };
 
-    fetchCameras();
+    const fetchTrends = async () => {
+      try {
+        const token = localStorage.getItem('intalicam_token');
+        const res = await fetch(`${API_BASE}/alerts/trends`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setGraphData({
+            activity: data.activity.map((v, i) => v || baseActivity[i]),
+            alerts:   data.alerts.map((v, i) => v || baseAlerts[i])
+          });
+        }
+      } catch (err) {
+        console.error('Trend fetch failed', err);
+      }
+    };
 
-    // Pull real graph data from logs
-    const logsStr = localStorage.getItem('intalicam_activity_logs');
-    if (logsStr) {
-        const logs = JSON.parse(logsStr);
+    fetchCameras();
+    fetchTrends();
+  }, []);
+
+  useEffect(() => {
+    // Realtime alerts injection into graphs and recents
+    if (alerts && alerts.length > 0) {
         let liveActivityData = [...baseActivity];
         let liveAlertData = [...baseAlerts];
         
-        // Loop through actually registered logs and bump up chart coordinates directly responding to real events!
-        logs.forEach(log => {
+        // Loop through real registered alerts to update graph
+        alerts.forEach(log => {
             if (log.time) {
                 let hour = parseInt(log.time.split(':')[0]);
                 let bucket = Math.floor(hour / 2);
                 if (bucket >= 0 && bucket < 12) {
-                    liveActivityData[bucket] += 2; // scale bump to show visibility
-                    if (log.status === 'Escalated' || log.status === 'Verified') {
+                    liveActivityData[bucket] += 2; 
+                    if (log.severity === 'Critical' || log.severity === 'High') {
                         liveAlertData[bucket] += 1;
                     }
                 }
@@ -152,31 +185,23 @@ const Dashboard = () => {
         setGraphData({ activity: liveActivityData, alerts: liveAlertData });
         
         // Populate recent alerts list dynamically
-        const realAlerts = logs.filter(l => l.status === 'Escalated' || l.status === 'Verified').slice(0,3);
-        if (realAlerts.length > 0) {
-            setRecentAlertsList(realAlerts.map((l, i) => ({
-                id: i,
-                title: l.type,
-                location: l.camera,
-                time: l.time,
-                level: l.confidence > 90 ? 'HIGH' : (l.confidence > 70 ? 'MEDIUM' : 'LOW')
-            })));
-        } else {
-             // Mock recent alerts fallback
-            setRecentAlertsList([
-              { id: 1, title: 'Intrusion Detected', location: 'Camera 3 - Lobby • Main Building', time: '2 min ago', level: 'HIGH' },
-              { id: 2, title: 'Unknown Person', location: 'Camera 1 - Front Gate • Building...', time: '15 min ago', level: 'MEDIUM' },
-              { id: 3, title: 'Night Movement', location: 'Camera 5 - Parking B • West Wi...', time: '1 hour ago', level: 'LOW' },
-            ]);
-        }
+        const realAlerts = alerts.slice(0, 3);
+        setRecentAlertsList(realAlerts.map((l, i) => ({
+            id: l.id || i,
+            title: l.type,
+            location: l.camera,
+            time: l.time,
+            level: l.severity ? l.severity.toUpperCase() : 'MEDIUM'
+        })));
+        
+        setStats(prev => ({ ...prev, alertsToday: alerts.length }));
     } else {
+        // Mock fallback if empty
         setRecentAlertsList([
-          { id: 1, title: 'Intrusion Detected', location: 'Camera 3 - Lobby • Main Building', time: '2 min ago', level: 'HIGH' },
-          { id: 2, title: 'Unknown Person', location: 'Camera 1 - Front Gate • Building...', time: '15 min ago', level: 'MEDIUM' },
-          { id: 3, title: 'Night Movement', location: 'Camera 5 - Parking B • West Wi...', time: '1 hour ago', level: 'LOW' },
+          { id: 1, title: 'Monitoring Active', location: 'System Normal', time: '1 min ago', level: 'LOW' }
         ]);
     }
-  }, []);
+  }, [alerts]);
 
   const StatCard = ({ title, value, subtext, subtextColor, icon: Icon, iconColor }) => (
     <div className="panel p-5 flex flex-col justify-between h-full">
@@ -255,10 +280,14 @@ const Dashboard = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {liveCameras.length > 0 ? liveCameras.map((cam, idx) => (
-              <div key={idx} className="panel flex flex-col h-64 border-dark-700">
+              <div key={cam.id || cam._id || idx} id={`dashboard-cam-${idx}`} className="panel flex flex-col h-64 border-dark-700 bg-black">
                 <div className="relative flex-1 bg-black/50 overflow-hidden">
                   <div className="absolute top-3 left-3 z-10">
-                    <div className="badge-live"><div className="dot-live"></div> LIVE</div>
+                    {cam.status === 'online' ? (
+                      <div className="badge-live"><div className="dot-live"></div> LIVE</div>
+                    ) : (
+                      <div className="badge-offline bg-dark-800/80"><div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div> OFFLINE</div>
+                    )}
                   </div>
                   {cam.status === 'online' ? (
                      <img
@@ -269,15 +298,40 @@ const Dashboard = () => {
                      />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-12 h-12 rounded-full border-2 border-safe/30 flex items-center justify-center">
-                         <div className="w-8 h-8 rounded-full border-2 border-safe/60 overflow-hidden"></div>
-                      </div>
+                      {/* Blank state to match offline UI */}
                     </div>
                   )}
                 </div>
-                <div className="p-4 bg-dark-800 border-t border-dark-700">
-                  <h4 className="text-sm font-bold text-text-main">{cam.name}</h4>
-                  <p className="text-xs text-text-muted mt-0.5">{cam.location}</p>
+                <div className="p-4 bg-dark-900 border-t border-dark-700 flex justify-between items-center">
+                  <div>
+                    <h4 className="text-sm font-bold text-white">{cam.name}</h4>
+                    <p className="text-xs text-gray-400 mt-0.5">{cam.location}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      className={`p-1.5 rounded-md transition-colors ${cam.recording ? 'text-danger bg-danger/20 hover:bg-danger/30' : 'text-gray-400 hover:text-danger hover:bg-danger/10'}`}
+                      title={cam.recording ? "Stop Recording" : "Record Feed"}
+                      onClick={() => toggleRecord(cam)}
+                    >
+                      <Circle className="w-4 h-4 fill-current" />
+                    </button>
+                    <button 
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-dark-700 rounded-md transition-colors" 
+                      title="Full Screen"
+                      onClick={() => {
+                        const elem = document.getElementById(`dashboard-cam-${idx}`);
+                        if (elem) {
+                          if (document.fullscreenElement) {
+                            document.exitFullscreen();
+                          } else {
+                            elem.requestFullscreen();
+                          }
+                        }
+                      }}
+                    >
+                      <Maximize className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )) : (

@@ -1,55 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Download, Filter, Eye, ShieldAlert, Calendar, LayoutDashboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const defaultLogs = [
-  { id: 'LOG-001', date: '1/15/2024', time: '14:32:45', camera: 'Camera 3 - Lobby', type: 'Intrusion Detected', confidence: 94, status: 'Escalated' },
-  { id: 'LOG-002', date: '1/15/2024', time: '13:15:22', camera: 'Camera 1 - Front Gate', type: 'Unknown Person', confidence: 87, status: 'Verified' },
-  { id: 'LOG-003', date: '1/15/2024', time: '11:45:10', camera: 'Camera 5 - Parking B', type: 'Night Movement', confidence: 72, status: 'Dismissed' },
-  { id: 'LOG-004', date: '1/15/2024', time: '09:30:55', camera: 'Camera 7 - Server Room', type: 'Unauthorized Access', confidence: 89, status: 'Verified' },
-  { id: 'LOG-005', date: '1/14/2024', time: '22:15:33', camera: 'Camera 9 - Loading Dock', type: 'Night Movement', confidence: 65, status: 'Detected' },
-  { id: 'LOG-006', date: '1/14/2024', time: '18:45:20', camera: 'Camera 2 - Parking Lot A', type: 'Unknown Person', confidence: 78, status: 'Dismissed' },
-  { id: 'LOG-007', date: '1/14/2024', time: '15:20:11', camera: 'Camera 4 - Warehouse', type: 'Intrusion Detected', confidence: 92, status: 'Escalated' },
-  { id: 'LOG-008', date: '1/14/2024', time: '12:10:05', camera: 'Camera 10 - Roof Access', type: 'Unauthorized Access', confidence: 81, status: 'Verified' },
-];
+import { useAlerts } from '../hooks/useAlerts';
 
 const ActivityLog = () => {
-  const [logs, setLogs] = useState([]);
+  const { alerts } = useAlerts();
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    // Sync with frontend "database" in local storage
-    const storedLogs = localStorage.getItem('intalicam_activity_logs');
-    if (!storedLogs) {
-      localStorage.setItem('intalicam_activity_logs', JSON.stringify(defaultLogs));
-      setLogs(defaultLogs);
-    } else {
-      setLogs(JSON.parse(storedLogs));
+  // Process incoming alerts into log format
+  const mappedLogs = alerts.map(a => {
+    return {
+      id: a.id || a._id,
+      date: a.timestamp ? a.timestamp.split(' ')[0] : 'N/A',
+      time: a.time,
+      camera: a.camera,
+      type: a.type,
+      confidence: a.severity === 'Critical' ? 98 : (a.severity === 'High' ? 85 : 65), // simulated confidence
+      status: a.status
     }
-    
-    // Polling simulation for active updates from other tabs
-    const interval = setInterval(() => {
-        const fresh = localStorage.getItem('intalicam_activity_logs');
-        if (fresh) setLogs(JSON.parse(fresh));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  });
 
-  const filteredLogs = logs.filter(log => 
+  const filteredLogs = mappedLogs.filter(log => 
     log.camera.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const stats = {
-      total: logs.length,
-      verified: logs.filter(l => l.status === 'Verified').length,
-      escalated: logs.filter(l => l.status === 'Escalated').length,
-      avgConfidence: logs.length ? Math.round(logs.reduce((acc, curr) => acc + curr.confidence, 0) / logs.length) : 0
+      total: mappedLogs.length,
+      verified: mappedLogs.filter(l => l.status === 'RESOLVED').length,
+      escalated: mappedLogs.filter(l => l.status === 'PENDING').length,
+      avgConfidence: mappedLogs.length ? Math.round(mappedLogs.reduce((acc, curr) => acc + curr.confidence, 0) / mappedLogs.length) : 0
   };
 
   const getStatusStyle = (status) => {
       switch(status) {
+          case 'PENDING': return 'border-danger/40 text-danger bg-danger/5';
+          case 'RESOLVED': return 'border-safe/40 text-safe bg-safe/5';
           case 'Escalated': return 'border-danger/40 text-danger bg-danger/5';
           case 'Verified': return 'border-safe/40 text-safe bg-safe/5';
           case 'Detected': return 'border-primary/40 text-primary bg-primary/5';

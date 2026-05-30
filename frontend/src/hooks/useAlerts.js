@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const STREAM_BASE = import.meta.env.VITE_STREAM_BASE || 'http://localhost:8000';
 const WS_URL   = import.meta.env.VITE_WS_URL  || 'http://localhost:5000';
 
 // Severity ordering for sorting/filtering
@@ -31,6 +32,9 @@ export const ALERT_ICONS = {
   'Missing Person Found':             '🔍',
   'Person Carrying Suspicious Object':'💼',
   'Object Left Behind':               '📦',
+  'Weapon Detected':                  '🔫',
+  'Armed Person Detected':            '🥷',
+  'Fire Detected':                    '🔥',
 };
 
 export function useAlerts() {
@@ -43,12 +47,10 @@ export function useAlerts() {
   // ── Fetch from backend ──────────────────────────────────────────────
   const fetchAlerts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/alerts?limit=100`, {
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
-      });
+      const res = await fetch(`${API_BASE}/alerts`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      // Backend returns { alerts, pagination } or raw array (fallback)
+      // data is { alerts: [], pagination: ... } from the node backend
       const list = Array.isArray(data) ? data : (data.alerts || []);
       setAlerts(list);
       setError(null);

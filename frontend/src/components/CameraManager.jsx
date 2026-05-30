@@ -8,6 +8,7 @@ const validateSource = (src) => {
   const trimmed = src.trim();
   if (/^\d+$/.test(trimmed)) return true;
   if (trimmed.startsWith('rtsp://') || trimmed.startsWith('rtsps://')) return true;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return true;
   return false;
 };
 
@@ -17,6 +18,7 @@ const CameraManager = () => {
   const [cameras, setCameras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(Date.now());
 
   // Modal state — mode: null | 'add' | 'edit'
   const [modalMode, setModalMode] = useState(null);
@@ -52,15 +54,13 @@ const CameraManager = () => {
   };
 
   const fetchCameras = useCallback(async () => {
-    const token = localStorage.getItem('intalicam_token');
     try {
-      const res = await fetch(`${API_BASE}/cameras`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${STREAM_BASE}/cameras`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setCameras(data);
       setBackendOnline(true);
+      setRefreshKey(Date.now());
     } catch {
       setBackendOnline(false);
       const saved = localStorage.getItem('intalicam_cameras');
@@ -85,7 +85,7 @@ const CameraManager = () => {
     setValidationError('');
 
     if (!validateSource(formData.sourceUrl)) {
-      setValidationError('Enter a valid RTSP URL (rtsp://...) or a webcam index (e.g. 0)');
+      setValidationError('Enter a valid Protocol URL (rtsp://..., http://...) or a webcam index (e.g. 0)');
       return;
     }
 
@@ -93,9 +93,9 @@ const CameraManager = () => {
     setSaving(true);
     try {
       if (modalMode === 'add') {
-        const res = await fetch(`${API_BASE}/cameras/add-camera`, {
+        const res = await fetch(`${STREAM_BASE}/add-camera`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
         });
         const data = await res.json();
@@ -105,9 +105,9 @@ const CameraManager = () => {
       } else {
         // Use the MongoDB _id for the REST call
         const camId = editingCamera._id || editingCamera.id;
-        const res = await fetch(`${API_BASE}/cameras/${camId}`, {
+        const res = await fetch(`${STREAM_BASE}/cameras/${camId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
         });
         const data = await res.json();
@@ -125,11 +125,9 @@ const CameraManager = () => {
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Remove "${name}" from the network?`)) return;
-    const token = localStorage.getItem('intalicam_token');
     try {
-      const res = await fetch(`${API_BASE}/cameras/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${STREAM_BASE}/cameras/${id}`, {
+        method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to remove camera');
       setCameras(prev => prev.filter(c => (c._id || c.id) !== id));
@@ -174,8 +172,8 @@ const CameraManager = () => {
         <div className="flex items-start gap-3 px-5 py-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 text-sm">
           <WifiOff className="w-5 h-5 mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold">Streaming backend not running</p>
-            <p className="mt-1 font-mono text-xs bg-black/30 px-2 py-1 rounded inline-block">python streaming-backend/app.py</p>
+            <p className="font-semibold">Backend API or Database offline</p>
+            <p className="mt-1 font-mono text-xs bg-black/30 px-2 py-1 rounded inline-block">node backend/server.js</p>
           </div>
         </div>
       )}
@@ -250,12 +248,18 @@ const CameraManager = () => {
 
               {/* Inline preview thumbnail (from streaming backend on 8000) */}
               <div className="mt-4 pt-4 border-t border-dark-700">
-                <img
-                  src={`${STREAM_BASE}/stream/${cam._id || cam.id}`}
-                  alt={`Preview ${cam.name}`}
-                  className="w-full aspect-video object-cover rounded-lg bg-black"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
+                {cam.status === 'online' ? (
+                  <img
+                    src={`${STREAM_BASE}/stream/${cam._id || cam.id}?t=${refreshKey}`}
+                    alt={`Preview ${cam.name}`}
+                    className="w-full aspect-video object-cover rounded-lg bg-black"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="w-full aspect-video rounded-lg flex items-center justify-center bg-black/50 border border-dark-700">
+                    <span className="text-gray-500 text-sm flex items-center gap-2"><WifiOff className="w-4 h-4" /> Camera Offline</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
