@@ -37,13 +37,9 @@ if %errorlevel% == 0 (
       timeout /t 3 >nul
     ) else (
       echo.
-      echo   [WARNING] MongoDB not found!
-      echo   Please install MongoDB Community from:
-      echo   https://www.mongodb.com/try/download/community
-      echo   Then run this script again.
+      echo   [WARNING] MongoDB not found or failed to run!
+      echo   The system will automatically run using local JSON storage fallback.
       echo.
-      pause
-      exit /b 1
     )
   )
 )

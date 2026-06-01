@@ -1,0 +1,58 @@
+[
+  {
+    "_id": "alert_1",
+    "id": "alert_1",
+    "cameraId": "cam_1",
+    "cameraName": "Front Gate Entrance",
+    "detectionType": "person",
+    "threatLevel": "medium",
+    "person": "Unknown Male",
+    "details": "Loitering near entrance fence",
+    "confidence": 0.92,
+    "status": "PENDING",
+    "imageUrl": "",
+    "timestamp": "2026-06-01T13:30:42.187Z"
+  },
+  {
+    "_id": "alert_2",
+    "id": "alert_2",
+    "cameraId": "cam_2",
+    "cameraName": "Backyard Perimeter",
+    "detectionType": "person",
+    "threatLevel": "high",
+    "person": "Intruder",
+    "details": "Unidentified person in restricted backyard zone",
+    "confidence": 0.96,
+    "status": "PENDING",
+    "imageUrl": "",
+    "timestamp": "2026-06-01T13:00:42.187Z"
+  },
+  {
+    "_id": "alert_3",
+    "id": "alert_3",
+    "cameraId": "cam_4",
+    "cameraName": "Main Office Lobby",
+    "detectionType": "motion",
+    "threatLevel": "low",
+    "person": "Staff",
+    "details": "Regular cleaning crew detected after hours",
+    "confidence": 0.88,
+    "status": "RESOLVED",
+    "imageUrl": "",
+    "timestamp": "2026-06-01T12:00:42.187Z"
+  },
+  {
+    "_id": "alert_4",
+    "id": "alert_4",
+    "cameraId": "cam_3",
+    "cameraName": "Parking Garage B1",
+    "detectionType": "vehicle",
+    "threatLevel": "low",
+    "person": "None",
+    "details": "Delivery van parked in loading dock",
+    "confidence": 0.94,
+    "status": "DISMISSED",
+    "imageUrl": "",
+    "timestamp": "2026-06-01T11:00:42.187Z"
+  }
+]

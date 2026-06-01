@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "cam_1",
+    "id": "cam_1",
+    "name": "Front Gate Entrance",
+    "location": "Main Gate",
+    "sourceUrl": "rtsp://mock-stream-1",
+    "status": "online",
+    "createdAt": "2026-05-27T14:00:42.178Z"
+  },
+  {
+    "_id": "cam_2",
+    "id": "cam_2",
+    "name": "Backyard Perimeter",
+    "location": "Backyard Garden",
+    "sourceUrl": "rtsp://mock-stream-2",
+    "status": "online",
+    "createdAt": "2026-05-28T14:00:42.182Z"
+  },
+  {
+    "_id": "cam_3",
+    "id": "cam_3",
+    "name": "Parking Garage B1",
+    "location": "Underground Garage",
+    "sourceUrl": "rtsp://mock-stream-3",
+    "status": "offline",
+    "createdAt": "2026-05-29T14:00:42.183Z"
+  },
+  {
+    "_id": "cam_4",
+    "id": "cam_4",
+    "name": "Main Office Lobby",
+    "location": "Lobby Area",
+    "sourceUrl": "rtsp://mock-stream-4",
+    "status": "online",
+    "createdAt": "2026-05-30T14:00:42.183Z"
+  }
+]
